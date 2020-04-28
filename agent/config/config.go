@@ -34,7 +34,7 @@ func FormatFrom(name string) string {
 }
 
 // Parse parses a config fragment in either JSON or HCL format.
-func Parse(data string, format string) (c Config, err error) {
+func Parse(data string, format string) (c Config, keys []string, err error) {
 	var raw map[string]interface{}
 	switch format {
 	case "json":
@@ -45,7 +45,7 @@ func Parse(data string, format string) (c Config, err error) {
 		err = fmt.Errorf("invalid format: %s", format)
 	}
 	if err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 
 	// We want to be able to report fields which we cannot map as an
@@ -136,15 +136,20 @@ func Parse(data string, format string) (c Config, err error) {
 		Result:   &c,
 	})
 	if err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 	if err := d.Decode(m); err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 
 	for _, k := range md.Unused {
 		err = multierror.Append(err, fmt.Errorf("invalid config key %s", k))
 	}
+
+	// Don't check these here. The builder can emit warnings for fields it
+	// doesn't like
+	keys = md.Keys
+
 	return
 }
 
@@ -179,122 +184,125 @@ type Config struct {
 	// DEPRECATED (ACL-Legacy-Compat) - moved into the "acl.tokens" stanza
 	ACLTTL *string `json:"acl_ttl,omitempty" hcl:"acl_ttl" mapstructure:"acl_ttl"`
 	// DEPRECATED (ACL-Legacy-Compat) - moved into the "acl.tokens" stanza
-	ACLToken                         *string                  `json:"acl_token,omitempty" hcl:"acl_token" mapstructure:"acl_token"`
-	ACL                              ACL                      `json:"acl,omitempty" hcl:"acl" mapstructure:"acl"`
-	Addresses                        Addresses                `json:"addresses,omitempty" hcl:"addresses" mapstructure:"addresses"`
-	AdvertiseAddrLAN                 *string                  `json:"advertise_addr,omitempty" hcl:"advertise_addr" mapstructure:"advertise_addr"`
-	AdvertiseAddrLANIPv4             *string                  `json:"advertise_addr_ipv4,omitempty" hcl:"advertise_addr_ipv4" mapstructure:"advertise_addr_ipv4"`
-	AdvertiseAddrLANIPv6             *string                  `json:"advertise_addr_ipv6,omitempty" hcl:"advertise_addr_ipv6" mapstructure:"advertise_addr_ipv6"`
-	AdvertiseAddrWAN                 *string                  `json:"advertise_addr_wan,omitempty" hcl:"advertise_addr_wan" mapstructure:"advertise_addr_wan"`
-	AdvertiseAddrWANIPv4             *string                  `json:"advertise_addr_wan_ipv4,omitempty" hcl:"advertise_addr_wan_ipv4" mapstructure:"advertise_addr_wan_ipv4"`
-	AdvertiseAddrWANIPv6             *string                  `json:"advertise_addr_wan_ipv6,omitempty" hcl:"advertise_addr_wan_ipv6" mapstructure:"advertise_addr_ipv6"`
-	Autopilot                        Autopilot                `json:"autopilot,omitempty" hcl:"autopilot" mapstructure:"autopilot"`
-	BindAddr                         *string                  `json:"bind_addr,omitempty" hcl:"bind_addr" mapstructure:"bind_addr"`
-	Bootstrap                        *bool                    `json:"bootstrap,omitempty" hcl:"bootstrap" mapstructure:"bootstrap"`
-	BootstrapExpect                  *int                     `json:"bootstrap_expect,omitempty" hcl:"bootstrap_expect" mapstructure:"bootstrap_expect"`
-	CAFile                           *string                  `json:"ca_file,omitempty" hcl:"ca_file" mapstructure:"ca_file"`
-	CAPath                           *string                  `json:"ca_path,omitempty" hcl:"ca_path" mapstructure:"ca_path"`
-	CertFile                         *string                  `json:"cert_file,omitempty" hcl:"cert_file" mapstructure:"cert_file"`
-	Check                            *CheckDefinition         `json:"check,omitempty" hcl:"check" mapstructure:"check"` // needs to be a pointer to avoid partial merges
-	CheckOutputMaxSize               *int                     `json:"check_output_max_size,omitempty" hcl:"check_output_max_size" mapstructure:"check_output_max_size"`
-	CheckUpdateInterval              *string                  `json:"check_update_interval,omitempty" hcl:"check_update_interval" mapstructure:"check_update_interval"`
-	Checks                           []CheckDefinition        `json:"checks,omitempty" hcl:"checks" mapstructure:"checks"`
-	ClientAddr                       *string                  `json:"client_addr,omitempty" hcl:"client_addr" mapstructure:"client_addr"`
-	ConfigEntries                    ConfigEntries            `json:"config_entries,omitempty" hcl:"config_entries" mapstructure:"config_entries"`
-	AutoEncrypt                      AutoEncrypt              `json:"auto_encrypt,omitempty" hcl:"auto_encrypt" mapstructure:"auto_encrypt"`
-	Connect                          Connect                  `json:"connect,omitempty" hcl:"connect" mapstructure:"connect"`
-	DNS                              DNS                      `json:"dns_config,omitempty" hcl:"dns_config" mapstructure:"dns_config"`
-	DNSDomain                        *string                  `json:"domain,omitempty" hcl:"domain" mapstructure:"domain"`
-	DNSAltDomain                     *string                  `json:"alt_domain,omitempty" hcl:"alt_domain" mapstructure:"alt_domain"`
-	DNSRecursors                     []string                 `json:"recursors,omitempty" hcl:"recursors" mapstructure:"recursors"`
-	DataDir                          *string                  `json:"data_dir,omitempty" hcl:"data_dir" mapstructure:"data_dir"`
-	Datacenter                       *string                  `json:"datacenter,omitempty" hcl:"datacenter" mapstructure:"datacenter"`
-	DefaultQueryTime                 *string                  `json:"default_query_time,omitempty" hcl:"default_query_time" mapstructure:"default_query_time"`
-	DisableAnonymousSignature        *bool                    `json:"disable_anonymous_signature,omitempty" hcl:"disable_anonymous_signature" mapstructure:"disable_anonymous_signature"`
-	DisableCoordinates               *bool                    `json:"disable_coordinates,omitempty" hcl:"disable_coordinates" mapstructure:"disable_coordinates"`
-	DisableHostNodeID                *bool                    `json:"disable_host_node_id,omitempty" hcl:"disable_host_node_id" mapstructure:"disable_host_node_id"`
-	DisableHTTPUnprintableCharFilter *bool                    `json:"disable_http_unprintable_char_filter,omitempty" hcl:"disable_http_unprintable_char_filter" mapstructure:"disable_http_unprintable_char_filter"`
-	DisableKeyringFile               *bool                    `json:"disable_keyring_file,omitempty" hcl:"disable_keyring_file" mapstructure:"disable_keyring_file"`
-	DisableRemoteExec                *bool                    `json:"disable_remote_exec,omitempty" hcl:"disable_remote_exec" mapstructure:"disable_remote_exec"`
-	DisableUpdateCheck               *bool                    `json:"disable_update_check,omitempty" hcl:"disable_update_check" mapstructure:"disable_update_check"`
-	DiscardCheckOutput               *bool                    `json:"discard_check_output" hcl:"discard_check_output" mapstructure:"discard_check_output"`
-	DiscoveryMaxStale                *string                  `json:"discovery_max_stale" hcl:"discovery_max_stale" mapstructure:"discovery_max_stale"`
-	EnableACLReplication             *bool                    `json:"enable_acl_replication,omitempty" hcl:"enable_acl_replication" mapstructure:"enable_acl_replication"`
-	EnableAgentTLSForChecks          *bool                    `json:"enable_agent_tls_for_checks,omitempty" hcl:"enable_agent_tls_for_checks" mapstructure:"enable_agent_tls_for_checks"`
-	EnableCentralServiceConfig       *bool                    `json:"enable_central_service_config,omitempty" hcl:"enable_central_service_config" mapstructure:"enable_central_service_config"`
-	EnableDebug                      *bool                    `json:"enable_debug,omitempty" hcl:"enable_debug" mapstructure:"enable_debug"`
-	EnableScriptChecks               *bool                    `json:"enable_script_checks,omitempty" hcl:"enable_script_checks" mapstructure:"enable_script_checks"`
-	EnableLocalScriptChecks          *bool                    `json:"enable_local_script_checks,omitempty" hcl:"enable_local_script_checks" mapstructure:"enable_local_script_checks"`
-	EnableSyslog                     *bool                    `json:"enable_syslog,omitempty" hcl:"enable_syslog" mapstructure:"enable_syslog"`
-	EncryptKey                       *string                  `json:"encrypt,omitempty" hcl:"encrypt" mapstructure:"encrypt"`
-	EncryptVerifyIncoming            *bool                    `json:"encrypt_verify_incoming,omitempty" hcl:"encrypt_verify_incoming" mapstructure:"encrypt_verify_incoming"`
-	EncryptVerifyOutgoing            *bool                    `json:"encrypt_verify_outgoing,omitempty" hcl:"encrypt_verify_outgoing" mapstructure:"encrypt_verify_outgoing"`
-	GossipLAN                        GossipLANConfig          `json:"gossip_lan,omitempty" hcl:"gossip_lan" mapstructure:"gossip_lan"`
-	GossipWAN                        GossipWANConfig          `json:"gossip_wan,omitempty" hcl:"gossip_wan" mapstructure:"gossip_wan"`
-	HTTPConfig                       HTTPConfig               `json:"http_config,omitempty" hcl:"http_config" mapstructure:"http_config"`
-	KeyFile                          *string                  `json:"key_file,omitempty" hcl:"key_file" mapstructure:"key_file"`
-	LeaveOnTerm                      *bool                    `json:"leave_on_terminate,omitempty" hcl:"leave_on_terminate" mapstructure:"leave_on_terminate"`
-	Limits                           Limits                   `json:"limits,omitempty" hcl:"limits" mapstructure:"limits"`
-	LogLevel                         *string                  `json:"log_level,omitempty" hcl:"log_level" mapstructure:"log_level"`
-	LogJSON                          *bool                    `json:"log_json,omitempty" hcl:"log_json" mapstructure:"log_json"`
-	LogFile                          *string                  `json:"log_file,omitempty" hcl:"log_file" mapstructure:"log_file"`
-	LogRotateDuration                *string                  `json:"log_rotate_duration,omitempty" hcl:"log_rotate_duration" mapstructure:"log_rotate_duration"`
-	LogRotateBytes                   *int                     `json:"log_rotate_bytes,omitempty" hcl:"log_rotate_bytes" mapstructure:"log_rotate_bytes"`
-	LogRotateMaxFiles                *int                     `json:"log_rotate_max_files,omitempty" hcl:"log_rotate_max_files" mapstructure:"log_rotate_max_files"`
-	MaxQueryTime                     *string                  `json:"max_query_time,omitempty" hcl:"max_query_time" mapstructure:"max_query_time"`
-	NodeID                           *string                  `json:"node_id,omitempty" hcl:"node_id" mapstructure:"node_id"`
-	NodeMeta                         map[string]string        `json:"node_meta,omitempty" hcl:"node_meta" mapstructure:"node_meta"`
-	NodeName                         *string                  `json:"node_name,omitempty" hcl:"node_name" mapstructure:"node_name"`
-	NonVotingServer                  *bool                    `json:"non_voting_server,omitempty" hcl:"non_voting_server" mapstructure:"non_voting_server"`
-	Performance                      Performance              `json:"performance,omitempty" hcl:"performance" mapstructure:"performance"`
-	PidFile                          *string                  `json:"pid_file,omitempty" hcl:"pid_file" mapstructure:"pid_file"`
-	Ports                            Ports                    `json:"ports,omitempty" hcl:"ports" mapstructure:"ports"`
-	PrimaryDatacenter                *string                  `json:"primary_datacenter,omitempty" hcl:"primary_datacenter" mapstructure:"primary_datacenter"`
-	PrimaryGateways                  []string                 `json:"primary_gateways" hcl:"primary_gateways" mapstructure:"primary_gateways"`
-	PrimaryGatewaysInterval          *string                  `json:"primary_gateways_interval,omitempty" hcl:"primary_gateways_interval" mapstructure:"primary_gateways_interval"`
-	RPCProtocol                      *int                     `json:"protocol,omitempty" hcl:"protocol" mapstructure:"protocol"`
-	RaftProtocol                     *int                     `json:"raft_protocol,omitempty" hcl:"raft_protocol" mapstructure:"raft_protocol"`
-	RaftSnapshotThreshold            *int                     `json:"raft_snapshot_threshold,omitempty" hcl:"raft_snapshot_threshold" mapstructure:"raft_snapshot_threshold"`
-	RaftSnapshotInterval             *string                  `json:"raft_snapshot_interval,omitempty" hcl:"raft_snapshot_interval" mapstructure:"raft_snapshot_interval"`
-	RaftTrailingLogs                 *int                     `json:"raft_trailing_logs,omitempty" hcl:"raft_trailing_logs" mapstructure:"raft_trailing_logs"`
-	ReconnectTimeoutLAN              *string                  `json:"reconnect_timeout,omitempty" hcl:"reconnect_timeout" mapstructure:"reconnect_timeout"`
-	ReconnectTimeoutWAN              *string                  `json:"reconnect_timeout_wan,omitempty" hcl:"reconnect_timeout_wan" mapstructure:"reconnect_timeout_wan"`
-	RejoinAfterLeave                 *bool                    `json:"rejoin_after_leave,omitempty" hcl:"rejoin_after_leave" mapstructure:"rejoin_after_leave"`
-	RetryJoinIntervalLAN             *string                  `json:"retry_interval,omitempty" hcl:"retry_interval" mapstructure:"retry_interval"`
-	RetryJoinIntervalWAN             *string                  `json:"retry_interval_wan,omitempty" hcl:"retry_interval_wan" mapstructure:"retry_interval_wan"`
-	RetryJoinLAN                     []string                 `json:"retry_join,omitempty" hcl:"retry_join" mapstructure:"retry_join"`
-	RetryJoinMaxAttemptsLAN          *int                     `json:"retry_max,omitempty" hcl:"retry_max" mapstructure:"retry_max"`
-	RetryJoinMaxAttemptsWAN          *int                     `json:"retry_max_wan,omitempty" hcl:"retry_max_wan" mapstructure:"retry_max_wan"`
-	RetryJoinWAN                     []string                 `json:"retry_join_wan,omitempty" hcl:"retry_join_wan" mapstructure:"retry_join_wan"`
-	SegmentName                      *string                  `json:"segment,omitempty" hcl:"segment" mapstructure:"segment"`
-	Segments                         []Segment                `json:"segments,omitempty" hcl:"segments" mapstructure:"segments"`
-	SerfBindAddrLAN                  *string                  `json:"serf_lan,omitempty" hcl:"serf_lan" mapstructure:"serf_lan"`
-	SerfBindAddrWAN                  *string                  `json:"serf_wan,omitempty" hcl:"serf_wan" mapstructure:"serf_wan"`
-	ServerMode                       *bool                    `json:"server,omitempty" hcl:"server" mapstructure:"server"`
-	ServerName                       *string                  `json:"server_name,omitempty" hcl:"server_name" mapstructure:"server_name"`
-	Service                          *ServiceDefinition       `json:"service,omitempty" hcl:"service" mapstructure:"service"`
-	Services                         []ServiceDefinition      `json:"services,omitempty" hcl:"services" mapstructure:"services"`
-	SessionTTLMin                    *string                  `json:"session_ttl_min,omitempty" hcl:"session_ttl_min" mapstructure:"session_ttl_min"`
-	SkipLeaveOnInt                   *bool                    `json:"skip_leave_on_interrupt,omitempty" hcl:"skip_leave_on_interrupt" mapstructure:"skip_leave_on_interrupt"`
-	StartJoinAddrsLAN                []string                 `json:"start_join,omitempty" hcl:"start_join" mapstructure:"start_join"`
-	StartJoinAddrsWAN                []string                 `json:"start_join_wan,omitempty" hcl:"start_join_wan" mapstructure:"start_join_wan"`
-	SyslogFacility                   *string                  `json:"syslog_facility,omitempty" hcl:"syslog_facility" mapstructure:"syslog_facility"`
-	TLSCipherSuites                  *string                  `json:"tls_cipher_suites,omitempty" hcl:"tls_cipher_suites" mapstructure:"tls_cipher_suites"`
-	TLSMinVersion                    *string                  `json:"tls_min_version,omitempty" hcl:"tls_min_version" mapstructure:"tls_min_version"`
-	TLSPreferServerCipherSuites      *bool                    `json:"tls_prefer_server_cipher_suites,omitempty" hcl:"tls_prefer_server_cipher_suites" mapstructure:"tls_prefer_server_cipher_suites"`
-	TaggedAddresses                  map[string]string        `json:"tagged_addresses,omitempty" hcl:"tagged_addresses" mapstructure:"tagged_addresses"`
-	Telemetry                        Telemetry                `json:"telemetry,omitempty" hcl:"telemetry" mapstructure:"telemetry"`
-	TranslateWANAddrs                *bool                    `json:"translate_wan_addrs,omitempty" hcl:"translate_wan_addrs" mapstructure:"translate_wan_addrs"`
-	UI                               *bool                    `json:"ui,omitempty" hcl:"ui" mapstructure:"ui"`
-	UIContentPath                    *string                  `json:"ui_content_path,omitempty" hcl:"ui_content_path" mapstructure:"ui_content_path"`
-	UIDir                            *string                  `json:"ui_dir,omitempty" hcl:"ui_dir" mapstructure:"ui_dir"`
-	UnixSocket                       UnixSocket               `json:"unix_sockets,omitempty" hcl:"unix_sockets" mapstructure:"unix_sockets"`
-	VerifyIncoming                   *bool                    `json:"verify_incoming,omitempty" hcl:"verify_incoming" mapstructure:"verify_incoming"`
-	VerifyIncomingHTTPS              *bool                    `json:"verify_incoming_https,omitempty" hcl:"verify_incoming_https" mapstructure:"verify_incoming_https"`
-	VerifyIncomingRPC                *bool                    `json:"verify_incoming_rpc,omitempty" hcl:"verify_incoming_rpc" mapstructure:"verify_incoming_rpc"`
-	VerifyOutgoing                   *bool                    `json:"verify_outgoing,omitempty" hcl:"verify_outgoing" mapstructure:"verify_outgoing"`
-	VerifyServerHostname             *bool                    `json:"verify_server_hostname,omitempty" hcl:"verify_server_hostname" mapstructure:"verify_server_hostname"`
-	Watches                          []map[string]interface{} `json:"watches,omitempty" hcl:"watches" mapstructure:"watches"`
+	ACLToken                         *string           `json:"acl_token,omitempty" hcl:"acl_token" mapstructure:"acl_token"`
+	ACL                              ACL               `json:"acl,omitempty" hcl:"acl" mapstructure:"acl"`
+	Addresses                        Addresses         `json:"addresses,omitempty" hcl:"addresses" mapstructure:"addresses"`
+	AdvertiseAddrLAN                 *string           `json:"advertise_addr,omitempty" hcl:"advertise_addr" mapstructure:"advertise_addr"`
+	AdvertiseAddrLANIPv4             *string           `json:"advertise_addr_ipv4,omitempty" hcl:"advertise_addr_ipv4" mapstructure:"advertise_addr_ipv4"`
+	AdvertiseAddrLANIPv6             *string           `json:"advertise_addr_ipv6,omitempty" hcl:"advertise_addr_ipv6" mapstructure:"advertise_addr_ipv6"`
+	AdvertiseAddrWAN                 *string           `json:"advertise_addr_wan,omitempty" hcl:"advertise_addr_wan" mapstructure:"advertise_addr_wan"`
+	AdvertiseAddrWANIPv4             *string           `json:"advertise_addr_wan_ipv4,omitempty" hcl:"advertise_addr_wan_ipv4" mapstructure:"advertise_addr_wan_ipv4"`
+	AdvertiseAddrWANIPv6             *string           `json:"advertise_addr_wan_ipv6,omitempty" hcl:"advertise_addr_wan_ipv6" mapstructure:"advertise_addr_ipv6"`
+	Autopilot                        Autopilot         `json:"autopilot,omitempty" hcl:"autopilot" mapstructure:"autopilot"`
+	BindAddr                         *string           `json:"bind_addr,omitempty" hcl:"bind_addr" mapstructure:"bind_addr"`
+	Bootstrap                        *bool             `json:"bootstrap,omitempty" hcl:"bootstrap" mapstructure:"bootstrap"`
+	BootstrapExpect                  *int              `json:"bootstrap_expect,omitempty" hcl:"bootstrap_expect" mapstructure:"bootstrap_expect"`
+	CAFile                           *string           `json:"ca_file,omitempty" hcl:"ca_file" mapstructure:"ca_file"`
+	CAPath                           *string           `json:"ca_path,omitempty" hcl:"ca_path" mapstructure:"ca_path"`
+	CertFile                         *string           `json:"cert_file,omitempty" hcl:"cert_file" mapstructure:"cert_file"`
+	Check                            *CheckDefinition  `json:"check,omitempty" hcl:"check" mapstructure:"check"` // needs to be a pointer to avoid partial merges
+	CheckOutputMaxSize               *int              `json:"check_output_max_size,omitempty" hcl:"check_output_max_size" mapstructure:"check_output_max_size"`
+	CheckUpdateInterval              *string           `json:"check_update_interval,omitempty" hcl:"check_update_interval" mapstructure:"check_update_interval"`
+	Checks                           []CheckDefinition `json:"checks,omitempty" hcl:"checks" mapstructure:"checks"`
+	ClientAddr                       *string           `json:"client_addr,omitempty" hcl:"client_addr" mapstructure:"client_addr"`
+	ConfigEntries                    ConfigEntries     `json:"config_entries,omitempty" hcl:"config_entries" mapstructure:"config_entries"`
+	AutoEncrypt                      AutoEncrypt       `json:"auto_encrypt,omitempty" hcl:"auto_encrypt" mapstructure:"auto_encrypt"`
+	Connect                          Connect           `json:"connect,omitempty" hcl:"connect" mapstructure:"connect"`
+	DNS                              DNS               `json:"dns_config,omitempty" hcl:"dns_config" mapstructure:"dns_config"`
+	DNSDomain                        *string           `json:"domain,omitempty" hcl:"domain" mapstructure:"domain"`
+	DNSAltDomain                     *string           `json:"alt_domain,omitempty" hcl:"alt_domain" mapstructure:"alt_domain"`
+	DNSRecursors                     []string          `json:"recursors,omitempty" hcl:"recursors" mapstructure:"recursors"`
+	DataDir                          *string           `json:"data_dir,omitempty" hcl:"data_dir" mapstructure:"data_dir"`
+	Datacenter                       *string           `json:"datacenter,omitempty" hcl:"datacenter" mapstructure:"datacenter"`
+	DefaultQueryTime                 *string           `json:"default_query_time,omitempty" hcl:"default_query_time" mapstructure:"default_query_time"`
+	DisableAnonymousSignature        *bool             `json:"disable_anonymous_signature,omitempty" hcl:"disable_anonymous_signature" mapstructure:"disable_anonymous_signature"`
+	DisableCoordinates               *bool             `json:"disable_coordinates,omitempty" hcl:"disable_coordinates" mapstructure:"disable_coordinates"`
+	DisableHostNodeID                *bool             `json:"disable_host_node_id,omitempty" hcl:"disable_host_node_id" mapstructure:"disable_host_node_id"`
+	DisableHTTPUnprintableCharFilter *bool             `json:"disable_http_unprintable_char_filter,omitempty" hcl:"disable_http_unprintable_char_filter" mapstructure:"disable_http_unprintable_char_filter"`
+	DisableKeyringFile               *bool             `json:"disable_keyring_file,omitempty" hcl:"disable_keyring_file" mapstructure:"disable_keyring_file"`
+	DisableRemoteExec                *bool             `json:"disable_remote_exec,omitempty" hcl:"disable_remote_exec" mapstructure:"disable_remote_exec"`
+	DisableUpdateCheck               *bool             `json:"disable_update_check,omitempty" hcl:"disable_update_check" mapstructure:"disable_update_check"`
+	DiscardCheckOutput               *bool             `json:"discard_check_output" hcl:"discard_check_output" mapstructure:"discard_check_output"`
+	DiscoveryMaxStale                *string           `json:"discovery_max_stale" hcl:"discovery_max_stale" mapstructure:"discovery_max_stale"`
+	EnableACLReplication             *bool             `json:"enable_acl_replication,omitempty" hcl:"enable_acl_replication" mapstructure:"enable_acl_replication"`
+	EnableAgentTLSForChecks          *bool             `json:"enable_agent_tls_for_checks,omitempty" hcl:"enable_agent_tls_for_checks" mapstructure:"enable_agent_tls_for_checks"`
+	EnableCentralServiceConfig       *bool             `json:"enable_central_service_config,omitempty" hcl:"enable_central_service_config" mapstructure:"enable_central_service_config"`
+	EnableDebug                      *bool             `json:"enable_debug,omitempty" hcl:"enable_debug" mapstructure:"enable_debug"`
+	EnableScriptChecks               *bool             `json:"enable_script_checks,omitempty" hcl:"enable_script_checks" mapstructure:"enable_script_checks"`
+	EnableLocalScriptChecks          *bool             `json:"enable_local_script_checks,omitempty" hcl:"enable_local_script_checks" mapstructure:"enable_local_script_checks"`
+	EnableSyslog                     *bool             `json:"enable_syslog,omitempty" hcl:"enable_syslog" mapstructure:"enable_syslog"`
+	EncryptKey                       *string           `json:"encrypt,omitempty" hcl:"encrypt" mapstructure:"encrypt"`
+	EncryptVerifyIncoming            *bool             `json:"encrypt_verify_incoming,omitempty" hcl:"encrypt_verify_incoming" mapstructure:"encrypt_verify_incoming"`
+	EncryptVerifyOutgoing            *bool             `json:"encrypt_verify_outgoing,omitempty" hcl:"encrypt_verify_outgoing" mapstructure:"encrypt_verify_outgoing"`
+	GossipLAN                        GossipLANConfig   `json:"gossip_lan,omitempty" hcl:"gossip_lan" mapstructure:"gossip_lan"`
+	GossipWAN                        GossipWANConfig   `json:"gossip_wan,omitempty" hcl:"gossip_wan" mapstructure:"gossip_wan"`
+	HTTPConfig                       HTTPConfig        `json:"http_config,omitempty" hcl:"http_config" mapstructure:"http_config"`
+	KeyFile                          *string           `json:"key_file,omitempty" hcl:"key_file" mapstructure:"key_file"`
+	LeaveOnTerm                      *bool             `json:"leave_on_terminate,omitempty" hcl:"leave_on_terminate" mapstructure:"leave_on_terminate"`
+	Limits                           Limits            `json:"limits,omitempty" hcl:"limits" mapstructure:"limits"`
+	LogLevel                         *string           `json:"log_level,omitempty" hcl:"log_level" mapstructure:"log_level"`
+	LogJSON                          *bool             `json:"log_json,omitempty" hcl:"log_json" mapstructure:"log_json"`
+	LogFile                          *string           `json:"log_file,omitempty" hcl:"log_file" mapstructure:"log_file"`
+	LogRotateDuration                *string           `json:"log_rotate_duration,omitempty" hcl:"log_rotate_duration" mapstructure:"log_rotate_duration"`
+	LogRotateBytes                   *int              `json:"log_rotate_bytes,omitempty" hcl:"log_rotate_bytes" mapstructure:"log_rotate_bytes"`
+	LogRotateMaxFiles                *int              `json:"log_rotate_max_files,omitempty" hcl:"log_rotate_max_files" mapstructure:"log_rotate_max_files"`
+	MaxQueryTime                     *string           `json:"max_query_time,omitempty" hcl:"max_query_time" mapstructure:"max_query_time"`
+	NodeID                           *string           `json:"node_id,omitempty" hcl:"node_id" mapstructure:"node_id"`
+	NodeMeta                         map[string]string `json:"node_meta,omitempty" hcl:"node_meta" mapstructure:"node_meta"`
+	NodeName                         *string           `json:"node_name,omitempty" hcl:"node_name" mapstructure:"node_name"`
+	// Enterprise Only
+	NonVotingServer         *bool       `json:"non_voting_server,omitempty" hcl:"non_voting_server" mapstructure:"non_voting_server"`
+	Performance             Performance `json:"performance,omitempty" hcl:"performance" mapstructure:"performance"`
+	PidFile                 *string     `json:"pid_file,omitempty" hcl:"pid_file" mapstructure:"pid_file"`
+	Ports                   Ports       `json:"ports,omitempty" hcl:"ports" mapstructure:"ports"`
+	PrimaryDatacenter       *string     `json:"primary_datacenter,omitempty" hcl:"primary_datacenter" mapstructure:"primary_datacenter"`
+	PrimaryGateways         []string    `json:"primary_gateways" hcl:"primary_gateways" mapstructure:"primary_gateways"`
+	PrimaryGatewaysInterval *string     `json:"primary_gateways_interval,omitempty" hcl:"primary_gateways_interval" mapstructure:"primary_gateways_interval"`
+	RPCProtocol             *int        `json:"protocol,omitempty" hcl:"protocol" mapstructure:"protocol"`
+	RaftProtocol            *int        `json:"raft_protocol,omitempty" hcl:"raft_protocol" mapstructure:"raft_protocol"`
+	RaftSnapshotThreshold   *int        `json:"raft_snapshot_threshold,omitempty" hcl:"raft_snapshot_threshold" mapstructure:"raft_snapshot_threshold"`
+	RaftSnapshotInterval    *string     `json:"raft_snapshot_interval,omitempty" hcl:"raft_snapshot_interval" mapstructure:"raft_snapshot_interval"`
+	RaftTrailingLogs        *int        `json:"raft_trailing_logs,omitempty" hcl:"raft_trailing_logs" mapstructure:"raft_trailing_logs"`
+	ReconnectTimeoutLAN     *string     `json:"reconnect_timeout,omitempty" hcl:"reconnect_timeout" mapstructure:"reconnect_timeout"`
+	ReconnectTimeoutWAN     *string     `json:"reconnect_timeout_wan,omitempty" hcl:"reconnect_timeout_wan" mapstructure:"reconnect_timeout_wan"`
+	RejoinAfterLeave        *bool       `json:"rejoin_after_leave,omitempty" hcl:"rejoin_after_leave" mapstructure:"rejoin_after_leave"`
+	RetryJoinIntervalLAN    *string     `json:"retry_interval,omitempty" hcl:"retry_interval" mapstructure:"retry_interval"`
+	RetryJoinIntervalWAN    *string     `json:"retry_interval_wan,omitempty" hcl:"retry_interval_wan" mapstructure:"retry_interval_wan"`
+	RetryJoinLAN            []string    `json:"retry_join,omitempty" hcl:"retry_join" mapstructure:"retry_join"`
+	RetryJoinMaxAttemptsLAN *int        `json:"retry_max,omitempty" hcl:"retry_max" mapstructure:"retry_max"`
+	RetryJoinMaxAttemptsWAN *int        `json:"retry_max_wan,omitempty" hcl:"retry_max_wan" mapstructure:"retry_max_wan"`
+	RetryJoinWAN            []string    `json:"retry_join_wan,omitempty" hcl:"retry_join_wan" mapstructure:"retry_join_wan"`
+	// Enterprise Only
+	SegmentName *string `json:"segment,omitempty" hcl:"segment" mapstructure:"segment"`
+	// Enterprise Only
+	Segments                    []Segment                `json:"segments,omitempty" hcl:"segments" mapstructure:"segments"`
+	SerfBindAddrLAN             *string                  `json:"serf_lan,omitempty" hcl:"serf_lan" mapstructure:"serf_lan"`
+	SerfBindAddrWAN             *string                  `json:"serf_wan,omitempty" hcl:"serf_wan" mapstructure:"serf_wan"`
+	ServerMode                  *bool                    `json:"server,omitempty" hcl:"server" mapstructure:"server"`
+	ServerName                  *string                  `json:"server_name,omitempty" hcl:"server_name" mapstructure:"server_name"`
+	Service                     *ServiceDefinition       `json:"service,omitempty" hcl:"service" mapstructure:"service"`
+	Services                    []ServiceDefinition      `json:"services,omitempty" hcl:"services" mapstructure:"services"`
+	SessionTTLMin               *string                  `json:"session_ttl_min,omitempty" hcl:"session_ttl_min" mapstructure:"session_ttl_min"`
+	SkipLeaveOnInt              *bool                    `json:"skip_leave_on_interrupt,omitempty" hcl:"skip_leave_on_interrupt" mapstructure:"skip_leave_on_interrupt"`
+	StartJoinAddrsLAN           []string                 `json:"start_join,omitempty" hcl:"start_join" mapstructure:"start_join"`
+	StartJoinAddrsWAN           []string                 `json:"start_join_wan,omitempty" hcl:"start_join_wan" mapstructure:"start_join_wan"`
+	SyslogFacility              *string                  `json:"syslog_facility,omitempty" hcl:"syslog_facility" mapstructure:"syslog_facility"`
+	TLSCipherSuites             *string                  `json:"tls_cipher_suites,omitempty" hcl:"tls_cipher_suites" mapstructure:"tls_cipher_suites"`
+	TLSMinVersion               *string                  `json:"tls_min_version,omitempty" hcl:"tls_min_version" mapstructure:"tls_min_version"`
+	TLSPreferServerCipherSuites *bool                    `json:"tls_prefer_server_cipher_suites,omitempty" hcl:"tls_prefer_server_cipher_suites" mapstructure:"tls_prefer_server_cipher_suites"`
+	TaggedAddresses             map[string]string        `json:"tagged_addresses,omitempty" hcl:"tagged_addresses" mapstructure:"tagged_addresses"`
+	Telemetry                   Telemetry                `json:"telemetry,omitempty" hcl:"telemetry" mapstructure:"telemetry"`
+	TranslateWANAddrs           *bool                    `json:"translate_wan_addrs,omitempty" hcl:"translate_wan_addrs" mapstructure:"translate_wan_addrs"`
+	UI                          *bool                    `json:"ui,omitempty" hcl:"ui" mapstructure:"ui"`
+	UIContentPath               *string                  `json:"ui_content_path,omitempty" hcl:"ui_content_path" mapstructure:"ui_content_path"`
+	UIDir                       *string                  `json:"ui_dir,omitempty" hcl:"ui_dir" mapstructure:"ui_dir"`
+	UnixSocket                  UnixSocket               `json:"unix_sockets,omitempty" hcl:"unix_sockets" mapstructure:"unix_sockets"`
+	VerifyIncoming              *bool                    `json:"verify_incoming,omitempty" hcl:"verify_incoming" mapstructure:"verify_incoming"`
+	VerifyIncomingHTTPS         *bool                    `json:"verify_incoming_https,omitempty" hcl:"verify_incoming_https" mapstructure:"verify_incoming_https"`
+	VerifyIncomingRPC           *bool                    `json:"verify_incoming_rpc,omitempty" hcl:"verify_incoming_rpc" mapstructure:"verify_incoming_rpc"`
+	VerifyOutgoing              *bool                    `json:"verify_outgoing,omitempty" hcl:"verify_outgoing" mapstructure:"verify_outgoing"`
+	VerifyServerHostname        *bool                    `json:"verify_server_hostname,omitempty" hcl:"verify_server_hostname" mapstructure:"verify_server_hostname"`
+	Watches                     []map[string]interface{} `json:"watches,omitempty" hcl:"watches" mapstructure:"watches"`
 
 	// This isn't used by Consul but we've documented a feature where users
 	// can deploy their snapshot agent configs alongside their Consul configs
@@ -371,14 +379,17 @@ type AdvertiseAddrsConfig struct {
 }
 
 type Autopilot struct {
-	CleanupDeadServers      *bool   `json:"cleanup_dead_servers,omitempty" hcl:"cleanup_dead_servers" mapstructure:"cleanup_dead_servers"`
+	CleanupDeadServers *bool `json:"cleanup_dead_servers,omitempty" hcl:"cleanup_dead_servers" mapstructure:"cleanup_dead_servers"`
+	// Enterprise Only
 	DisableUpgradeMigration *bool   `json:"disable_upgrade_migration,omitempty" hcl:"disable_upgrade_migration" mapstructure:"disable_upgrade_migration"`
 	LastContactThreshold    *string `json:"last_contact_threshold,omitempty" hcl:"last_contact_threshold" mapstructure:"last_contact_threshold"`
 	MaxTrailingLogs         *int    `json:"max_trailing_logs,omitempty" hcl:"max_trailing_logs" mapstructure:"max_trailing_logs"`
 	MinQuorum               *uint   `json:"min_quorum,omitempty" hcl:"min_quorum" mapstructure:"min_quorum"`
+	// Enterprise Only
 	RedundancyZoneTag       *string `json:"redundancy_zone_tag,omitempty" hcl:"redundancy_zone_tag" mapstructure:"redundancy_zone_tag"`
 	ServerStabilizationTime *string `json:"server_stabilization_time,omitempty" hcl:"server_stabilization_time" mapstructure:"server_stabilization_time"`
-	UpgradeVersionTag       *string `json:"upgrade_version_tag,omitempty" hcl:"upgrade_version_tag" mapstructure:"upgrade_version_tag"`
+	// Enterprise Only
+	UpgradeVersionTag *string `json:"upgrade_version_tag,omitempty" hcl:"upgrade_version_tag" mapstructure:"upgrade_version_tag"`
 }
 
 // ServiceWeights defines the registration of weights used in DNS for a Service
@@ -606,21 +617,22 @@ type SOA struct {
 }
 
 type DNS struct {
-	AllowStale          *bool             `json:"allow_stale,omitempty" hcl:"allow_stale" mapstructure:"allow_stale"`
-	ARecordLimit        *int              `json:"a_record_limit,omitempty" hcl:"a_record_limit" mapstructure:"a_record_limit"`
-	DisableCompression  *bool             `json:"disable_compression,omitempty" hcl:"disable_compression" mapstructure:"disable_compression"`
-	EnableTruncate      *bool             `json:"enable_truncate,omitempty" hcl:"enable_truncate" mapstructure:"enable_truncate"`
-	MaxStale            *string           `json:"max_stale,omitempty" hcl:"max_stale" mapstructure:"max_stale"`
-	NodeTTL             *string           `json:"node_ttl,omitempty" hcl:"node_ttl" mapstructure:"node_ttl"`
-	OnlyPassing         *bool             `json:"only_passing,omitempty" hcl:"only_passing" mapstructure:"only_passing"`
-	RecursorTimeout     *string           `json:"recursor_timeout,omitempty" hcl:"recursor_timeout" mapstructure:"recursor_timeout"`
-	ServiceTTL          map[string]string `json:"service_ttl,omitempty" hcl:"service_ttl" mapstructure:"service_ttl"`
-	UDPAnswerLimit      *int              `json:"udp_answer_limit,omitempty" hcl:"udp_answer_limit" mapstructure:"udp_answer_limit"`
-	NodeMetaTXT         *bool             `json:"enable_additional_node_meta_txt,omitempty" hcl:"enable_additional_node_meta_txt" mapstructure:"enable_additional_node_meta_txt"`
-	SOA                 *SOA              `json:"soa,omitempty" hcl:"soa" mapstructure:"soa"`
-	UseCache            *bool             `json:"use_cache,omitempty" hcl:"use_cache" mapstructure:"use_cache"`
-	CacheMaxAge         *string           `json:"cache_max_age,omitempty" hcl:"cache_max_age" mapstructure:"cache_max_age"`
-	EnterpriseDNSConfig `hcl:",squash" mapstructure:",squash"`
+	AllowStale         *bool             `json:"allow_stale,omitempty" hcl:"allow_stale" mapstructure:"allow_stale"`
+	ARecordLimit       *int              `json:"a_record_limit,omitempty" hcl:"a_record_limit" mapstructure:"a_record_limit"`
+	DisableCompression *bool             `json:"disable_compression,omitempty" hcl:"disable_compression" mapstructure:"disable_compression"`
+	EnableTruncate     *bool             `json:"enable_truncate,omitempty" hcl:"enable_truncate" mapstructure:"enable_truncate"`
+	MaxStale           *string           `json:"max_stale,omitempty" hcl:"max_stale" mapstructure:"max_stale"`
+	NodeTTL            *string           `json:"node_ttl,omitempty" hcl:"node_ttl" mapstructure:"node_ttl"`
+	OnlyPassing        *bool             `json:"only_passing,omitempty" hcl:"only_passing" mapstructure:"only_passing"`
+	RecursorTimeout    *string           `json:"recursor_timeout,omitempty" hcl:"recursor_timeout" mapstructure:"recursor_timeout"`
+	ServiceTTL         map[string]string `json:"service_ttl,omitempty" hcl:"service_ttl" mapstructure:"service_ttl"`
+	UDPAnswerLimit     *int              `json:"udp_answer_limit,omitempty" hcl:"udp_answer_limit" mapstructure:"udp_answer_limit"`
+	NodeMetaTXT        *bool             `json:"enable_additional_node_meta_txt,omitempty" hcl:"enable_additional_node_meta_txt" mapstructure:"enable_additional_node_meta_txt"`
+	SOA                *SOA              `json:"soa,omitempty" hcl:"soa" mapstructure:"soa"`
+	UseCache           *bool             `json:"use_cache,omitempty" hcl:"use_cache" mapstructure:"use_cache"`
+	CacheMaxAge        *string           `json:"cache_max_age,omitempty" hcl:"cache_max_age" mapstructure:"cache_max_age"`
+	// Enterprise Only
+	PreferNamespace *bool `json:"prefer_namespace,omitempty" hcl:"prefer_namespace" mapstructure:"prefer_namespace"`
 }
 
 type HTTPConfig struct {
@@ -713,18 +725,21 @@ type ACL struct {
 	Tokens                 Tokens  `json:"tokens,omitempty" hcl:"tokens" mapstructure:"tokens"`
 	DisabledTTL            *string `json:"disabled_ttl,omitempty" hcl:"disabled_ttl" mapstructure:"disabled_ttl"`
 	EnableTokenPersistence *bool   `json:"enable_token_persistence" hcl:"enable_token_persistence" mapstructure:"enable_token_persistence"`
-	EnterpriseACLConfig    `hcl:",squash" mapstructure:",squash"`
+	// Enterprise Only
+	MSPDisableBootstrap *bool `json:"msp_disable_bootstrap" hcl:"msp_disable_bootstrap" mapstructure:"msp_disable_bootstrap"`
 }
 
 type Tokens struct {
-	Master                 *string                `json:"master,omitempty" hcl:"master" mapstructure:"master"`
-	Replication            *string                `json:"replication,omitempty" hcl:"replication" mapstructure:"replication"`
-	AgentMaster            *string                `json:"agent_master,omitempty" hcl:"agent_master" mapstructure:"agent_master"`
-	Default                *string                `json:"default,omitempty" hcl:"default" mapstructure:"default"`
-	Agent                  *string                `json:"agent,omitempty" hcl:"agent" mapstructure:"agent"`
+	Master      *string `json:"master,omitempty" hcl:"master" mapstructure:"master"`
+	Replication *string `json:"replication,omitempty" hcl:"replication" mapstructure:"replication"`
+	AgentMaster *string `json:"agent_master,omitempty" hcl:"agent_master" mapstructure:"agent_master"`
+	Default     *string `json:"default,omitempty" hcl:"default" mapstructure:"default"`
+	Agent       *string `json:"agent,omitempty" hcl:"agent" mapstructure:"agent"`
+	// Enterprise Only
 	ManagedServiceProvider []ServiceProviderToken `json:"managed_service_provider,omitempty" hcl:"managed_service_provider" mapstructure:"managed_service_provider"`
 }
 
+// ServiceProviderToken groups an accessor and secret for a service provider token. Enterprise Only
 type ServiceProviderToken struct {
 	AccessorID *string `json:"accessor_id,omitempty" hcl:"accessor_id" mapstructure:"accessor_id"`
 	SecretID   *string `json:"secret_id,omitempty" hcl:"secret_id" mapstructure:"secret_id"`
