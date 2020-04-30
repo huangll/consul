@@ -1972,10 +1972,7 @@ func (s *Store) CheckIngressServiceNodes(ws memdb.WatchSet, serviceName string, 
 		if err != nil {
 			return 0, nil, err
 		}
-		if idx > maxIdx {
-			maxIdx = idx
-		}
-
+		maxIdx = max(maxIdx, idx)
 		results = append(results, n...)
 	}
 	return maxIdx, results, nil
@@ -2159,11 +2156,7 @@ func (s *Store) GatewayServices(ws memdb.WatchSet, gateway string, entMeta *stru
 			if err != nil {
 				return 0, nil, fmt.Errorf("failed checking protocol: %s", err)
 			}
-
-			if idx > maxIdx {
-				maxIdx = idx
-			}
-
+			maxIdx = max(maxIdx, idx)
 			if matches {
 				results = append(results, svc)
 			}
@@ -2171,10 +2164,7 @@ func (s *Store) GatewayServices(ws memdb.WatchSet, gateway string, entMeta *stru
 	}
 
 	idx := maxIndexTxn(tx, gatewayServicesTableName)
-	if idx > maxIdx {
-		maxIdx = idx
-	}
-	return maxIdx, results, nil
+	return max(maxIdx, idx), results, nil
 }
 
 // parseCheckServiceNodes is used to parse through a given set of services,
@@ -2673,10 +2663,7 @@ func (s *Store) serviceGatewayNodes(tx *memdb.Txn, service string, kind structs.
 		if mapping.GatewayKind != kind {
 			continue
 		}
-
-		if mapping.ModifyIndex > maxIdx {
-			maxIdx = mapping.ModifyIndex
-		}
+		maxIdx = max(maxIdx, mapping.ModifyIndex)
 
 		// Look up nodes for gateway
 		gwServices, err := s.catalogServiceNodeList(tx, mapping.Gateway.ID, "service", &mapping.Gateway.EnterpriseMeta)
@@ -2714,9 +2701,7 @@ func (s *Store) checkProtocolMatch(ws memdb.WatchSet,
 	if err != nil {
 		return 0, false, err
 	}
-	if idx > maxIdx {
-		maxIdx = idx
-	}
+	maxIdx = max(maxIdx, idx)
 
 	entries := structs.NewDiscoveryChainConfigEntries()
 	if proxyConfig != nil {
@@ -2743,4 +2728,11 @@ func (s *Store) checkProtocolMatch(ws memdb.WatchSet,
 	}
 
 	return maxIdx, true, nil
+}
+
+func max(x, y uint64) uint64 {
+	if x > y {
+		return x
+	}
+	return y
 }
