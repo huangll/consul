@@ -651,6 +651,9 @@ func TestDecodeConfigEntry(t *testing.T) {
 			expect: &IngressGatewayConfigEntry{
 				Kind: "ingress-gateway",
 				Name: "ingress-web",
+				TLS: GatewayTLSConfig{
+					Enabled: true,
+				},
 				Listeners: []IngressListener{
 					IngressListener{
 						Port:     8080,
