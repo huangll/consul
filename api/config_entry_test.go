@@ -619,6 +619,9 @@ func TestDecodeConfigEntry(t *testing.T) {
 			{
 				"Kind": "ingress-gateway",
 				"Name": "ingress-web",
+				"Tls": {
+					"Enabled": true
+				},
 				"Listeners": [
 					{
 						"Port": 8080,
